@@ -1,0 +1,63 @@
+// select Sentinel-2 imagery and set to ImageCollection S2_collection
+var s2_collection = ee.ImageCollection("COPERNICUS/S2");
+
+// reduce the imageCollection by filtering on location and period of interest and cloud free
+var s2_collection_filtered = s2_collection
+.filterBounds(Enschede)
+.filterDate('2017-05-01','2017-12-01')
+.filter(ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', 0));
+print('Number of images', s2_collection_filtered);
+
+// center map on study area using zoom level 12
+Map.centerObject(Enschede, 12);
+
+// get the first (non-cloudy) image and store in variable s2_image.
+var s2_image = s2_collection_filtered.first().clip(Enschede);
+
+// print image information
+print('Image information', s2_image);
+
+// add s2_image to map using default visualization
+Map.addLayer(s2_image, {}, 'default RGB');
+
+// define visualization parameters
+var visParams = {bands: ['B4', 'B3', 'B2'], min:0, max: 4000};
+
+// add true color to map
+Map.addLayer(s2_image, visParams, 'true color composite');
+print('Date: ', s2_image.date().format());
+
+// define NDVI mapping function
+var addNDVI = function(image) {
+  
+// calculate normalized difference using near-infrared and red bands, and rename to NDVI.
+var NDVI = image
+.normalizedDifference(['B8', 'B4'])
+.rename('NDVI');
+
+// add new NDVI band to original image
+return image.addBands(NDVI); };
+
+// map NDVI function over imageCollection s2_collection_filtered and select ndvi band
+var s2_NDVI = s2_collection_filtered.map(addNDVI);
+
+// get the first ndvi image and store in variable s2_ndvi_image.
+var s2_NDVI_image = s2_NDVI.select('NDVI').first().clip(Enschede);
+
+// define visualization parameters for NDVI image
+var ndviParams = {band: ['NDVI'],
+min: -1,
+max: 1,
+palette: ['blue', 'white', 'green'] };
+
+// add NDVI image to map view
+Map.addLayer(s2_NDVI_image, ndviParams, 'NDVI');
+
+// exports NDVI to Google Drive – it goes into your Google Drive
+Export.image.toDrive({
+image: s2_NDVI_image,
+description:'NDVI_ENSCHEDE_2016',
+scale: 10,
+region: Enschede,
+fileFormat:'Geotiff',
+});
